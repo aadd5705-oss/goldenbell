@@ -199,6 +199,19 @@ td.tot{font-weight:700;background:#FFF4BE}
 .msg{font-size:40px;color:var(--q-ink);line-height:1.4;word-break:keep-all;margin:0}
 .msg.small{font-size:28px}
 .code{font-size:150px;letter-spacing:.12em;color:var(--q-ink);line-height:1;text-shadow:0 6px 0 rgba(0,0,0,.25)}
+.rules3{position:absolute;left:46px;right:46px;top:140px;bottom:110px;display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:26px}
+.rcard{background:var(--cream);border-radius:26px;padding:24px 26px;display:flex;flex-direction:column;gap:14px;color:var(--ink);min-height:0}
+.rcard h3{margin:0;font-weight:400;font-size:36px;display:flex;align-items:center;gap:12px}
+.rcard h3 i{font-style:normal;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;color:var(--white);font-size:26px;flex:none}
+.rcard ol,.rcard ul{margin:0;padding-left:30px;font-family:"Noto Sans KR",sans-serif;font-size:27px;line-height:1.5;word-break:keep-all;display:flex;flex-direction:column;gap:16px}
+.rcard li::marker{font-weight:700;color:var(--orange-edge)}
+.rcard b{color:#C0392B}
+.prize{display:flex;flex-direction:column;align-items:center;gap:6px;background:#FFF4BE;border-radius:18px;padding:14px 10px;text-align:center}
+.prize .big10{font-size:58px;line-height:1;color:var(--ink)}
+.prize span{font-family:"Noto Sans KR",sans-serif;font-size:25px;line-height:1.5;word-break:keep-all}
+.prize img{height:70px}
+.rtitle{position:absolute;left:0;right:0;top:34px;text-align:center}
+.rtitle span{display:inline-block;background:var(--gold-1);color:var(--ink);font-size:52px;padding:6px 60px;border:4px solid var(--gold-2);border-radius:14px;box-shadow:0 6px 0 var(--gold-2)}
 .qrbox{background:#FFFFFF;padding:14px;border-radius:18px;width:300px;height:300px;box-shadow:0 6px 0 rgba(0,0,0,.25)}
 .qrbox svg{display:block;width:100%;height:100%}
 .lobby .code{font-size:110px}
@@ -2605,7 +2618,62 @@ addEventListener("resize",fit);
 
 /* ---------- 소리 ---------- */
 let actx=null;
-function beep(f,d){ if(!sound) return; try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); const o=actx.createOscillator(),g=actx.createGain(); o.frequency.value=f; g.gain.setValueAtTime(.25,actx.currentTime); g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+d); o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+d);}catch(e){} }
+/* ---------- 효과음 (모두 코드로 만든 소리라 따로 파일이 필요 없어요) ---------- */
+const SFX=(()=>{
+  let ctx=null, master=null, noise=null;
+  function setup(x){
+    ctx=x; const comp=ctx.createDynamicsCompressor();
+    comp.threshold.value=-14; comp.knee.value=6; comp.ratio.value=6; comp.attack.value=.003; comp.release.value=.2;
+    master=ctx.createGain(); master.gain.value=1.15; master.connect(comp); comp.connect(ctx.destination);
+    noise=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate); const d=noise.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  }
+  function c(){ if(!ctx){ const A=window.AudioContext||window.webkitAudioContext; if(!A) return null; setup(new A()); } if(ctx.state==="suspended"&&ctx.resume) ctx.resume(); return ctx; }
+  function tone(f,t,d,type,vol,att){ const o=ctx.createOscillator(),g=ctx.createGain(); o.type=type||"sine"; o.frequency.setValueAtTime(f,t); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+(att||.005)); g.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(g); g.connect(master); o.start(t); o.stop(t+d+.05); }
+  function bell(f,t,d,vol){ [[1,1],[2,.55],[2.76,.4],[5.4,.22],[8.93,.12]].forEach(([r,a])=>tone(f*r,t,d/(r*.3+.7),"sine",vol*a,.002)); }
+  function brass(f,t,d,vol){
+    const g=ctx.createGain(), lp=ctx.createBiquadFilter(); lp.type="lowpass"; lp.Q.value=2;
+    lp.frequency.setValueAtTime(600,t); lp.frequency.linearRampToValueAtTime(3200,t+.06); lp.frequency.linearRampToValueAtTime(1800,t+d);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+.04); g.gain.setValueAtTime(vol*.85,t+Math.max(.05,d-.08)); g.gain.exponentialRampToValueAtTime(.0001,t+d+.12);
+    [-6,0,7].forEach(dt=>{ const o=ctx.createOscillator(); o.type="sawtooth"; o.frequency.setValueAtTime(f,t); o.detune.value=dt; o.connect(lp); o.start(t); o.stop(t+d+.2); });
+    lp.connect(g); g.connect(master);
+  }
+  function hit(t,freq,q,vol,dur){ const s=ctx.createBufferSource(); s.buffer=noise; const bp=ctx.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=freq; bp.Q.value=q; const g=ctx.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.0001,t+dur); s.connect(bp); bp.connect(g); g.connect(master); s.start(t,Math.random()*1.5,dur+.02); }
+  function voice(t,dur){
+    const f0=170+Math.random()*280, o=ctx.createOscillator(); o.type="sawtooth";
+    o.frequency.setValueAtTime(f0*.8,t); o.frequency.linearRampToValueAtTime(f0*1.2,t+.5); o.frequency.linearRampToValueAtTime(f0*.95,t+dur);
+    const lfo=ctx.createOscillator(), lg=ctx.createGain(); lfo.frequency.value=4.5+Math.random()*2.5; lg.gain.value=f0*.035; lfo.connect(lg); lg.connect(o.frequency);
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,t); const pk=.32+Math.random()*.12;
+    g.gain.linearRampToValueAtTime(pk,t+.3+Math.random()*.25); g.gain.setValueAtTime(pk*.9,t+dur*.45); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+    [[300,760,6],[780,1150,7],[2400,2600,5]].forEach(([a,b,q],i)=>{ const f=ctx.createBiquadFilter(); f.type="bandpass"; f.Q.value=q; f.frequency.setValueAtTime(a,t); f.frequency.linearRampToValueAtTime(b,t+.45); const fg=ctx.createGain(); fg.gain.value=i===2?.4:1; o.connect(f); f.connect(fg); fg.connect(g); });
+    g.connect(master); o.start(t); lfo.start(t); o.stop(t+dur+.1); lfo.stop(t+dur+.1);
+  }
+  function cheer(t,dur){
+    for(let i=0;i<18;i++) voice(t+Math.random()*.35, dur*(.75+Math.random()*.35));
+    const s=ctx.createBufferSource(); s.buffer=noise; s.loop=true; const bp=ctx.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=1100; bp.Q.value=.7;
+    const g=ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.35,t+.5); g.gain.exponentialRampToValueAtTime(.0001,t+dur+.5);
+    s.connect(bp); bp.connect(g); g.connect(master); s.start(t); s.stop(t+dur+.6);
+  }
+  function applause(t,dur){ const n=Math.floor(dur*45); for(let i=0;i<n;i++){ const tt=t+Math.pow(Math.random(),1.4)*dur; hit(tt,1400+Math.random()*1600,1.2,.35+Math.random()*.45,.03+Math.random()*.03); } }
+  function drumroll(t,dur){ let tt=t, k=0; while(tt<t+dur){ const p=(tt-t)/dur; hit(tt,1900,1.5,.25+.6*p,.06); tone(170,tt,.05,"triangle",.08+.2*p); tt+=.055-.02*p; k++; } hit(t+dur,1200,.8,1,.35); tone(90,t+dur,.4,"sine",.9); }
+  function play(fn){ if(!sound) return; try{ if(!c()) return; fn(ctx.currentTime+.02); }catch(e){} }
+  return {
+    unlock(){ try{ c(); }catch(e){} },
+    _use(x){ setup(x); },
+    tick(){ play(t=>tone(1250,t,.07,"square",.35)); },
+    beep(){ play(t=>{ tone(880,t,.3,"square",.6); tone(1760,t,.3,"sine",.3); }); },
+    question(){ play(t=>{ bell(1318,t,1.2,.45); bell(1568,t+.14,1.4,.45); }); },
+    start(){ play(t=>{ brass(392,t,.12,.6); brass(523,t+.14,.35,.7); bell(1046,t+.14,1.4,.5); }); },
+    timeUp(){ play(t=>{ [0,.3,.6].forEach(d=>bell(988,t+d,1.6,1)); }); },
+    reveal(){ play(t=>{ [523,659,784].forEach((f,i)=>brass(f,t+i*.12,.12,.55)); brass(1046,t+.36,.7,.7); brass(784,t+.36,.7,.4); bell(2093,t+.36,1.6,.35); }); },
+    board(){ play(t=>{ [784,988,1175,1568].forEach((f,i)=>tone(f,t+i*.07,.35,"triangle",.45)); }); },
+    rules(){ play(t=>{ bell(784,t,1.2,.5); bell(1046,t+.16,1.6,.5); }); },
+    finale(){ play(t=>{ drumroll(t,2.2); const f=t+2.3;
+      [[392,.14],[392,.14],[392,.14],[523,.9]].reduce((tt,[n,d])=>{ brass(n,tt,d,.75); if(d>.5){ brass(659,tt,d,.5); brass(784,tt,d,.5); } return tt+d+.04; },f);
+      cheer(f+.4,3.6); applause(f+.5,5); }); },
+    cheer(){ play(t=>{ cheer(t,3.4); applause(t+.1,4.5); }); }
+  };
+})();
+function beep(){}
 
 /* ---------- 데이터 연결 (Firebase / 미리보기) ---------- */
 async function initFirebase(){
@@ -2716,9 +2784,9 @@ function loop(){
     const left=(s.startAt+SECONDS*1000-API.now())/1000;
     setRing(left);
     const sh=Math.ceil(left);
-    if(sh<=3&&sh>0&&last!==sh){ last=sh; beep(660,.15); }
+    if(IS_TEACHER&&sh>0&&sh<SECONDS&&last!==sh){ last=sh; if(sh<=3) SFX.beep(); else SFX.tick(); }
     if(left<=0){
-      if(IS_TEACHER){ if(API.now()>=s.startAt+SECONDS*1000+GRACE && closingFor!==s.qkey){ closingFor=s.qkey; beep(440,.6); API.update("rooms/"+CODE+"/state",{phase:"closed"}); return; } }
+      if(IS_TEACHER){ if(API.now()>=s.startAt+SECONDS*1000+GRACE && closingFor!==s.qkey){ closingFor=s.qkey; API.update("rooms/"+CODE+"/state",{phase:"closed"}); return; } }
       else { onStudentTimeUp(); return; }
     }
     raf=requestAnimationFrame(step);
@@ -2734,6 +2802,24 @@ function tFooter(idx,right){
    '<span class="grow"></span><button class="ghost" data-act="sound">'+(sound?'소리 켜짐':'소리 꺼짐')+'</button>'+
    (document.fullscreenEnabled?'<button class="ghost" data-act="full">전체 화면</button>':'')+right+'</div>';
 }
+function rulesHTML(){
+  return '<div class="rtitle"><span>도전! 골든벨 규칙</span></div><div class="rules3">'+
+   '<div class="rcard"><h3><i style="background:var(--c4)">1</i>이렇게 풀어요</h3><ol>'+
+     '<li>선생님이 문제를 읽어 주면 잘 들어요.</li>'+
+     '<li>“10초 시작”과 함께 크롬북에 답을 내요. O/X와 객관식은 누르고, 주관식은 써요.</li>'+
+     '<li><b>10초가 지나면 답을 낼 수 없어요.</b> 시간 안에 답을 안 내면 0점이에요.</li>'+
+     '<li>10초 안에는 답을 바꿀 수 있어요. 주관식은 쓰던 답이 저절로 저장돼요.</li>'+
+     '<li>문제가 끝나면 정답과 내 점수를 함께 확인해요.</li></ol></div>'+
+   '<div class="rcard"><h3><i style="background:var(--c1)">2</i>점수와 상품</h3>'+
+     '<div class="prize"><span>총 '+Q.length+'문제, '+TOTAL+'점 만점</span><span>문제마다 점수가 달라요!<br>오른쪽 위 점수를 꼭 확인해요.</span></div>'+
+     '<div class="prize"><img src="'+IMG.crown+'" alt=""><span><b class="big10" style="color:var(--ink)">10점 이상</b></span><span>모은 친구 중 점수가 높은<br><b>1~3등에게 상품</b>을 줘요.</span><span style="font-size:21px">동점이면 결정 문제로 순위를 정해요.</span></div></div>'+
+   '<div class="rcard"><h3><i style="background:var(--c3)">3</i>우리의 약속</h3><ul>'+
+     '<li>내 크롬북 화면은 나만 봐요. 친구 답을 보지 않아요.</li>'+
+     '<li>정답을 큰 소리로 말하지 않아요.</li>'+
+     '<li>틀려도 괜찮아요! 친구를 놀리지 않고 함께 응원해요.</li>'+
+     '<li>책이나 인터넷을 찾아보지 않고, 배운 내용으로 풀어요.</li></ul></div>'+
+   '</div>';
+}
 function qrSVG(url){ try{ const q=qrcode(0,'M'); q.addData(url); q.make(); return q.createSvgTag({cellSize:6,margin:0,scalable:true,alt:'참가 QR 코드'}); }catch(e){ return ''; } }
 function joinURL(){ const u=new URL(location.href); u.search=""; u.hash=""; u.searchParams.set("room",CODE); if(DEMO) u.searchParams.set("demo",""); return u.toString().replace("demo=","demo"); }
 
@@ -2742,9 +2828,16 @@ function tHome(msg){
    '<p class="msg small">'+(msg?esc(msg):'선생님 화면이에요. 방을 만들면 방 코드가 생기고, 학생들은 크롬북에서 방 코드와 이름을 입력해 참가해요.')+'</p>'+
    '<button class="btn primary" data-act="create">새 골든벨 방 만들기</button></div></div>';
 }
+let lastKey=null;
+function phaseSound(st){
+  const key=st.phase+":"+(st.idx||0); if(key===lastKey) return; const first=lastKey===null; lastKey=key; if(first) return;
+  const m={show:"question",question:"start",closed:"timeUp",reveal:"reveal",board:"board",final:"finale",rules:"rules"}[st.phase];
+  if(m) SFX[m]();
+}
 function tRender(){
   if(!ROOM){ tHome("방이 닫혔어요. 새 방을 만들어 주세요."); return; }
   const st=ROOM.state||{phase:"lobby",idx:0}, idx=st.idx||0, q=Q[idx];
+  phaseSound(st);
   const players=playersOf(ROOM), n=players.length;
   const answers=(ROOM.answers&&ROOM.answers[qk(idx)])||{};
   const submitted=players.filter(p=>answers[p.id]).length;
@@ -2758,7 +2851,11 @@ function tRender(){
       '<p style="margin:0;font-family:Noto Sans KR,sans-serif;font-size:19px;color:#5A5440">이름을 잘못 쓴 학생은 ×를 눌러 내보내면 다시 참가할 수 있어요.</p>'+
       '<div class="chips">'+(n?players.map(p=>'<span class="chip">'+esc(p.name)+'<button data-act="kick" data-id="'+esc(p.id)+'" aria-label="'+esc(p.name)+' 내보내기">×</button></span>').join(""):'<div class="empty">학생이 들어오면 여기에 이름이 나타나요.</div>')+'</div>'+
       '<div class="regfoot"><span class="cnt">'+n+'명 참가</span><button class="btn primary" data-act="start" '+(n?'':'disabled')+'>골든벨 시작</button></div></div></div>'+
-      tFooter(null,'<button class="ghost" data-act="closeroom">방 닫기</button>')+'</div>';
+      tFooter(null,'<button class="ghost" data-act="soundtest">소리 시험</button><button class="ghost" data-act="closeroom">방 닫기</button>')+'</div>';
+    return;
+  }
+  if(st.phase==="rules"){
+    stage.innerHTML='<div class="screen">'+rulesHTML()+tFooter(null,'<span class="pill">참가 '+n+'명</span><button class="btn small" data-act="tolobby">참가 화면</button><button class="btn primary" data-act="first">1번 문제 시작</button>')+'</div>';
     return;
   }
   if(st.phase==="show"||st.phase==="question"||st.phase==="closed"){
@@ -2798,7 +2895,7 @@ function tRender(){
     stage.innerHTML='<div class="screen final"><div class="ribbon">축하합니다!</div>'+
       '<div class="note">'+(pd.any?'10점 이상인 학생 중 1~3등에게 상품을 줘요.':'10점 이상인 학생이 없어요.')+(pd.tie?' 동점자는 결정 문제로 순위를 가려 주세요.':'')+'</div>'+pd.html+
       '<div class="allist" style="grid-template-rows:repeat('+per+',1fr)">'+rows.map(r=>'<div class="lr'+(r.score<10?' below':'')+'"><span class="rk'+(r.rank<=3&&r.score>=10?' r'+r.rank:'')+'">'+r.rank+'</span><span class="nm">'+esc(r.name)+'</span><span class="pt">'+r.score+'점</span></div>').join("")+'</div>'+
-      '<div class="foot"><span class="prog">최종 점수 ('+TOTAL+'점 만점)</span><span class="grow"></span><button class="ghost" data-act="closeroom">수업 끝, 기록 지우기</button><button class="btn small" data-act="toreveal">마지막 문제로</button><button class="btn primary" data-act="table">문제별 결과표</button></div>'+
+      '<div class="foot"><span class="prog">최종 점수 ('+TOTAL+'점 만점)</span><span class="grow"></span><button class="ghost" data-act="closeroom">수업 끝, 기록 지우기</button><button class="btn small" data-act="cheer">환호 다시</button><button class="btn small" data-act="toreveal">마지막 문제로</button><button class="btn primary" data-act="table">문제별 결과표</button></div>'+
       (showTable?tableOverlay(rows):'')+'</div>';
   }
 }
@@ -2825,7 +2922,9 @@ async function tAction(a,el){
   if(a==="create") return tCreate();
   if(a==="kick") return API.remove(base+"/players/"+el.dataset.id);
   if(a==="copy"){ try{ await navigator.clipboard.writeText(joinURL()); el.textContent="복사했어요"; }catch(e){ el.textContent="복사가 안 돼요. 주소를 직접 알려 주세요"; } return; }
-  if(a==="start") return API.update(base+"/state",{phase:"show",idx:0,qkey:"q0"});
+  if(a==="start") return API.update(base+"/state",{phase:"rules",idx:0,qkey:"q0"});
+  if(a==="tolobby") return API.update(base+"/state",{phase:"lobby"});
+  if(a==="first") return API.update(base+"/state",{phase:"show",idx:0,qkey:"q0"});
   if(a==="go"){ closingFor=null; const now=API.now(); return API.update(base+"/state",{phase:"question",startAt:now,deadline:now+SECONDS*1000+GRACE}); }
   if(a==="reveal"){
     cancelAnimationFrame(raf);
@@ -2890,6 +2989,9 @@ function sRender(){
   if(st.phase==="lobby"){
     stage.innerHTML='<div class="screen"><div class="center"><p class="result ok">참가 완료!</p><p class="big">'+esc(me.name)+'</p><p class="msg">선생님이 시작할 때까지 기다려 주세요.</p><span class="pill">지금 '+playersOf(ROOM).length+'명 참가</span></div>'+sFoot(null)+'</div>'; return;
   }
+  if(st.phase==="rules"){
+    stage.innerHTML='<div class="screen">'+rulesHTML()+sFoot(null)+'</div>'; return;
+  }
   if(st.phase==="show"||st.phase==="question"||st.phase==="closed"){
     const open=st.phase==="question"&&API.now()<st.deadline;
     const mine=myAnswer(idx);
@@ -2944,9 +3046,12 @@ function onStudentTimeUp(){
 
 /* ---------- 이벤트 ---------- */
 stage.addEventListener("click",e=>{
+  if(IS_TEACHER) SFX.unlock();
   const b=e.target.closest("[data-act]"); if(!b||b.disabled) return;
   const a=b.dataset.act;
-  if(a==="sound"){ sound=!sound; b.textContent=sound?'소리 켜짐':'소리 꺼짐'; return; }
+  if(a==="sound"){ sound=!sound; b.textContent=sound?'소리 켜짐':'소리 꺼짐'; if(sound) SFX.board(); return; }
+  if(a==="cheer"){ SFX.cheer(); return; }
+  if(a==="soundtest"){ SFX.timeUp(); return; }
   if(a==="full"){ try{ document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen(); }catch(err){} return; }
   if(IS_TEACHER) return tAction(a,b);
   if(a==="join") return sDoJoin();
